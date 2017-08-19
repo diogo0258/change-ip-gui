@@ -8,24 +8,24 @@ from http://stackoverflow.com/questions/5533975/netsh-change-adapter-to-dhcp
 ; ini has a tendency to accumulate blank lines after deleting and inserting ips.
 
 ; Gotta be admin to change adapter settings. Snippet from the docs (in Variables)
+; or shajul's, I don't know anymore: http://www.autohotkey.com/board/topic/46526-run-as-administrator-xpvista7-a-isadmin-params-lib/
 if not A_IsAdmin
 {
-   DllCall("shell32\ShellExecute", uint, 0, str, "RunAs", str, A_AhkPath, str, """" . A_ScriptFullPath . """", str, A_WorkingDir, int, 1)
-   ExitApp
+	if A_IsCompiled
+		DllCall("shell32\ShellExecuteA", uint, 0, str, "RunAs", str, A_ScriptFullPath, str, "", str, A_WorkingDir, int, 1)
+	else
+		DllCall("shell32\ShellExecute", uint, 0, str, "RunAs", str, A_AhkPath, str, """" . A_ScriptFullPath . """", str, A_WorkingDir, int, 1)
+		
+	ExitApp
 }
 
 presets_ini_file := A_ScriptDir "\presets.ini"
-interfaces_file := A_ScriptDir "\interfaces.txt"
-
-; TODO: this belongs in a function
-runwait, % A_ScriptDir "\list-network-interfaces.bat", % A_ScriptDir
-fileread, interfaces, % interfaces_file
-stringreplace, interfaces, interfaces, `r`n, |, all
+interfaces_tmpfile := A_ScriptDir "\interfaces.tmp"
 
 gui, font, s13, courier new
 
 gui, add, text, section, interface
-gui, add, listbox, xs y+20 w230 r3 vinterface gupdate_command, % interfaces
+gui, add, listbox, xs y+20 w230 r3 vinterface gupdate_command, % get_interfaces_list(interfaces_tmpfile)
 gui, add, text, ym x+40 section, presets
 gui, add, listbox, y+20 w230 R8 glbselect vlb, % ini_get_sections(presets_ini_file)
 
@@ -80,6 +80,15 @@ ini_get_sections(file) {
 	return % sections
 }
 
+get_interfaces_list(tmp_file) {
+	filedelete, % tmp_file
+	runwait, %comspec% /c "For /f "skip=2 tokens=4*" `%a In ('NetSh Interface Show Interface') Do echo `%a>> %tmp_file%", % A_ScriptDir
+	fileread, interfaces, % tmp_file
+	filedelete, % tmp_file  ; don't leave nothing in the dir
+	stringreplace, interfaces, interfaces, `r`n, |, all
+	return interfaces
+}
+	
 ini_delete_section(ini_file, ini_section) {
 	fileread, ini_contents, % ini_file
 	ini_contents := regexreplace(ini_contents, "s)\[" . ini_section . "\].*?(?=(\[.+]|$))")
