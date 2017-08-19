@@ -1,24 +1,16 @@
 
 /*
-Programa pra facilitar a alteração de algumas configurações de interfaces de rede.
+Helps to change some network interface configs
 
-O script cria em sua pasta um arquivo permanente "presets.ini", um arquivo temporário "interfaces.tmp",
-	e supõe que haja um "putty.exe" na pasta com ele (pros botões de telnet e ssh)
+Script creates in its folder a permanent file called "presets.ini", and a temp file called "interfaces.tmp".
+It also assumes there's a putty.exe in the same folder (for the telnet and ssh buttons)
 
 TODO:
-- moving stuff in preset listview shoud keep them selected (DONE)
-- when saving, check if the name already exists
-- ^enter anywhere to run?
+- find a better way to make context sensitive hotkeys for when listbox is selected
+	- didn't work: hotkey ifwinactive ahk_id %controlhwnd%
 - ini has a tendency to accumulate blank lines after deleting and inserting ips. Should fix?
 - use more robust ini functions, maybe lib, objects?
-- investigate performance: doing gui submits vs guicontrolgets for tasks that require only one value
-*/
-
-/*
-USAGE NOTES
-usage should be obvious, apart from:
-- a double click on a saved preset should immediately run it
-- pressing del when preset listview is focused should delete the selected entry
+- button to get active adapter confs
 */
 
 /*
@@ -29,13 +21,13 @@ from http://stackoverflow.com/questions/5533975/netsh-change-adapter-to-dhcp
 	- I had a similar problem with Windows 7. I found that if the link is down on the interface you are trying to modify, you get the message "DHCP is already enabled on this interface." If you plug a cable in (establish a link), the same command works fine.
 */
 
-
 #NoEnv
 #NoTrayIcon
-; no tray because permanent gui, =/= than always running script.
+; no tray because permanent gui, not a always running script.
 
 ; Gotta be admin to change adapter settings. Snippet from the docs (in Variables)
 ; or shajul's, I don't know anymore: http://www.autohotkey.com/board/topic/46526-run-as-administrator-xpvista7-a-isadmin-params-lib/
+; TODO: not working if compiled?
 if not A_IsAdmin
 {
 	if A_IsCompiled
@@ -90,16 +82,36 @@ Gui, Add, Button, x432 y19 w60 h30 gsave, Save
 
 Gui, Add, Text, x432 y69 w120 h20 , Outros
 Gui, Add, Button, x432 y89 w120 h30 gping, ping gateway
-Gui, Add, Button, x432 y129 w120 h30 gbrowse, gateway in browser
+Gui, Add, Button, x432 y129 w120 h30 gbrowse, browse gateway
 Gui, Add, Button, x432 y169 w120 h30 gtelnet, telnet gateway
 Gui, Add, Button, x432 y209 w120 h30 gssh, ssh gateway
+
+Gui, Add, Text, xm+2 section
+Gui, Add, Text, yp+10, Ctrl+Enter = Run    Ctrl+s = Save    Ctrl+p = Ping    Ctrl+b = Browse    Ctrl+t = Telnet    Ctrl+h = SSH    Esc = Close
+Gui, Add, Text, xs, When preset list is focused: Del = delete    Ctrl+up = move up    Ctrl+down = move down    Double click = Run
 
 ; Generated using SmartGUI Creator 4.0
 
 gosub, ip_toggle
 gosub, dns_toggle
 
+Gui, +Hwndgui_hwnd
+
+hotkey, ifwinactive, ahk_id %gui_hwnd%
+	hotkey, ^p, ping, on
+	hotkey, ^b, browse, on
+	hotkey, ^s, save, on
+	hotkey, ^t, telnet, on
+	hotkey, ^h, ssh, on
+	hotkey, ^Enter, run_cmd, on
+
+	;hotkey, ^up, context_preset_up
+	;hotkey, ^down, context_preset_down
+	;hotkey, del, context_preset_delete
+hotkey, ifwinactive
+
 Gui, Show
+
 Return
 
 ; end of autoexec ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -389,10 +401,11 @@ return
 browse:
 	gui, submit, nohide
 
-	; RaptorX's, from http://www.autohotkey.com/board/topic/84785-default-browser-path-and-executable/
-	RegRead, browser, HKCR, .html  ; Get default browser
+	; gt57's, from http://www.autohotkey.com/board/topic/84785-default-browser-path-and-executable/
+	; RegRead, browser, HKCR, .html  ; use this for XP, I think it was working on 7 too.
+	RegRead, browser, HKCU, Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.html\UserChoice, Progid
 	RegRead, browser_cmd, HKCR, %browser%\shell\open\command  ; Get path to default browser + options
-	
+
 	; string has the form "path to browser" arg1 arg2 OR pathtobrowserwithoutspaces arg1 arg2
 	regexmatch(browser_cmd, "^("".*?""|[^\s]+) (.*)", browser_cmd_split)
 	
@@ -411,21 +424,31 @@ telnet:
 return
 
 
+del::
+context_preset_delete:
+	guicontrolget, focused, FocusV
+	if (focused != "preset")
+	{
+		; send, %A_ThisHotkey%
+		send, {del}
+		return
+	}
 preset_delete:
 	gui, submit, nohide
 	ini_delete_section(presets_ini_file, preset)
 	guicontrol,, preset, % "|" ini_get_sections(presets_ini_file)
 return
 
-del::
+
+^up::
+context_preset_up:
 	guicontrolget, focused, FocusV
-	if (focused == "preset")
-		gosub, preset_delete
-	else
-		send, {del}
-return
-
-
+	if (focused != "preset")
+	{
+		; send, %A_ThisHotkey%
+		send, ^{up}
+		return
+	}
 preset_up:
 	gui, submit, nohide
 	ini_move_section_up(presets_ini_file, preset)
@@ -442,6 +465,16 @@ preset_up:
 	guicontrol, -altsubmit, preset
 return
 
+
+^Down::
+context_preset_down:
+	guicontrolget, focused, FocusV
+	if (focused != "preset")
+	{
+		; send, %A_ThisHotkey%
+		send, ^{down}
+		return
+	}
 preset_down:
 	gui, submit, nohide
 	ini_move_section_down(presets_ini_file, preset)
@@ -460,12 +493,11 @@ return
 
 
 ; from https://msdn.microsoft.com/en-us/library/windows/desktop/bb775195(v=vs.85).aspx
+; get the number of items in a listbox
 LB_get_count(hwnd) {
 	SendMessage, 0x018B, 0, 0, ,ahk_id %hwnd%  ; 0x018B is LB_GETCOUNT
 	return ErrorLevel
 }
-
-f12::reload
 
 
 /*
