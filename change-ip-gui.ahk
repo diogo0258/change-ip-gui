@@ -1,17 +1,22 @@
+
 /*
 Programa pra facilitar a alteração de algumas configurações de interfaces de rede.
 
 O script cria em sua pasta um arquivo permanente "presets.ini", um arquivo temporário "interfaces.tmp",
-	e supõe que haja um "putty.exe" na pasta com ele (botões de telnet e ssh)
+	e supõe que haja um "putty.exe" na pasta com ele (pros botões de telnet e ssh)
 
 TODO:
-- moving stuff in preset listview shoud keep them selected
+- moving stuff in preset listview shoud keep them selected (DONE)
+- when saving, check if the name already exists
+- ^enter anywhere to run?
 - ini has a tendency to accumulate blank lines after deleting and inserting ips. Should fix?
+- use more robust ini functions, maybe lib, objects?
 - investigate performance: doing gui submits vs guicontrolgets for tasks that require only one value
 */
 
 /*
-USAGE NOTES (usage should be obvious, apart from:)
+USAGE NOTES
+usage should be obvious, apart from:
 - a double click on a saved preset should immediately run it
 - pressing del when preset listview is focused should delete the selected entry
 */
@@ -26,6 +31,8 @@ from http://stackoverflow.com/questions/5533975/netsh-change-adapter-to-dhcp
 
 
 #NoEnv
+#NoTrayIcon
+; no tray because permanent gui, =/= than always running script.
 
 ; Gotta be admin to change adapter settings. Snippet from the docs (in Variables)
 ; or shajul's, I don't know anymore: http://www.autohotkey.com/board/topic/46526-run-as-administrator-xpvista7-a-isadmin-params-lib/
@@ -50,7 +57,7 @@ Gui, Add, Text, x12 y9 w120 h20 , Interfaces
 Gui, Add, ListBox, x12 y29 w120 h50 vinterface gupdate_cmd, % get_interfaces_list(interfaces_tmpfile)
 
 Gui, Add, Text, x12 y89 w120 h20 , Configs salvas
-Gui, Add, ListBox, x12 y109 w120 h130 vpreset gpreset_select, % ini_get_sections(presets_ini_file)
+Gui, Add, ListBox, x12 y109 w120 h130 vpreset gpreset_select Hwndpresets_hwnd, % ini_get_sections(presets_ini_file)
 Gui, Add, Button, x12 y233 w30 h20 gpreset_up, /\
 Gui, Add, Button, x42 y233 w30 h20 gpreset_down, \/
 Gui, Add, Button, x102 y233 w30 h20 gpreset_delete, X
@@ -333,6 +340,17 @@ save:
 		return
 	}
 
+	; check if already exists
+	current_sections := ini_get_sections(presets_ini_file)
+	loop, parse, current_sections, |
+	{
+		if (name == A_LoopField)
+		{
+			msgbox There is an entry called %name% already.`nChoose another name.
+			return
+		}
+	}
+	
 	iniwrite, % ip_ignore, % presets_ini_file, % name, ip_ignore
 	if not ip_ignore
 	{
@@ -356,13 +374,15 @@ save:
 		}
 	}
 	
-	guicontrol,, preset, % name
+	guicontrol,, preset, % name  ; TODO: select new entry?
+	GuiControl, ChooseString, preset, % name
 return
 
 
 ping:
 	gui, submit, nohide
-	run, %comspec% /c ping -t %gateway%
+	; run, %comspec% /c ping -t %gateway%
+	ShellRun("ping", "-t " gateway)  ; gotta run as de-elevated user
 return
 
 
@@ -372,9 +392,13 @@ browse:
 	; RaptorX's, from http://www.autohotkey.com/board/topic/84785-default-browser-path-and-executable/
 	RegRead, browser, HKCR, .html  ; Get default browser
 	RegRead, browser_cmd, HKCR, %browser%\shell\open\command  ; Get path to default browser + options
-
-	stringreplace, browser_cmd, browser_cmd, `%1, % gateway
-	Run, %browser_cmd%
+	
+	; string has the form "path to browser" arg1 arg2 OR pathtobrowserwithoutspaces arg1 arg2
+	regexmatch(browser_cmd, "^("".*?""|[^\s]+) (.*)", browser_cmd_split)
+	
+	stringreplace, browser_cmd_split2, browser_cmd_split2, `%1, % gateway
+	
+	ShellRun(browser_cmd_split1, browser_cmd_split2)
 return
 
 
@@ -382,7 +406,8 @@ ssh:
 telnet:
 	gui, submit, nohide
 	
-	run, "%putty%" -%A_ThisLabel% %gateway%
+	ShellRun(putty, "-" A_ThisLabel " " gateway)
+	; run, "%putty%" -%A_ThisLabel% %gateway%
 return
 
 
@@ -404,12 +429,86 @@ return
 preset_up:
 	gui, submit, nohide
 	ini_move_section_up(presets_ini_file, preset)
+	
+	guicontrol, +altsubmit, preset
+	gui, submit, nohide
+	
 	guicontrol,, preset, % "|" ini_get_sections(presets_ini_file)
+
+	if (preset > 1)
+		preset -= 1
+	
+	guicontrol, choose, preset, % preset
+	guicontrol, -altsubmit, preset
 return
 
 preset_down:
 	gui, submit, nohide
 	ini_move_section_down(presets_ini_file, preset)
+	
+	guicontrol, +altsubmit, preset
+	gui, submit, nohide
+	
 	guicontrol,, preset, % "|" ini_get_sections(presets_ini_file)
+	
+	if ( preset < LB_get_count(presets_hwnd) ) 
+		preset += 1
+	
+	guicontrol, choose, preset, % preset
+	guicontrol, -altsubmit, preset
 return
 
+
+; from https://msdn.microsoft.com/en-us/library/windows/desktop/bb775195(v=vs.85).aspx
+LB_get_count(hwnd) {
+	SendMessage, 0x018B, 0, 0, ,ahk_id %hwnd%  ; 0x018B is LB_GETCOUNT
+	return ErrorLevel
+}
+
+f12::reload
+
+
+/*
+  ShellRun by Lexikos
+    requires: AutoHotkey_L
+    license: http://creativecommons.org/publicdomain/zero/1.0/
+
+  Credit for explaining this method goes to BrandonLive:
+  http://brandonlive.com/2008/04/27/getting-the-shell-to-run-an-application-for-you-part-2-how/
+ 
+  Shell.ShellExecute(File [, Arguments, Directory, Operation, Show])
+  http://msdn.microsoft.com/en-us/library/windows/desktop/gg537745
+*/
+ShellRun(prms*)
+{
+    shellWindows := ComObjCreate("{9BA05972-F6A8-11CF-A442-00A0C90A8F39}")
+    
+    desktop := shellWindows.Item(ComObj(19, 8)) ; VT_UI4, SCW_DESKTOP                
+   
+    ; Retrieve top-level browser object.
+    if ptlb := ComObjQuery(desktop
+        , "{4C96BE40-915C-11CF-99D3-00AA004AE837}"  ; SID_STopLevelBrowser
+        , "{000214E2-0000-0000-C000-000000000046}") ; IID_IShellBrowser
+    {
+        ; IShellBrowser.QueryActiveShellView -> IShellView
+        if DllCall(NumGet(NumGet(ptlb+0)+15*A_PtrSize), "ptr", ptlb, "ptr*", psv:=0) = 0
+        {
+            ; Define IID_IDispatch.
+            VarSetCapacity(IID_IDispatch, 16)
+            NumPut(0x46000000000000C0, NumPut(0x20400, IID_IDispatch, "int64"), "int64")
+           
+            ; IShellView.GetItemObject -> IDispatch (object which implements IShellFolderViewDual)
+            DllCall(NumGet(NumGet(psv+0)+15*A_PtrSize), "ptr", psv
+                , "uint", 0, "ptr", &IID_IDispatch, "ptr*", pdisp:=0)
+           
+            ; Get Shell object.
+            shell := ComObj(9,pdisp,1).Application
+           
+            ; IShellDispatch2.ShellExecute
+            shell.ShellExecute(prms*)
+           
+            ObjRelease(psv)
+        }
+        ObjRelease(ptlb)
+    }
+}
