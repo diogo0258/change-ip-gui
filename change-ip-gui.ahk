@@ -5,12 +5,16 @@ from http://stackoverflow.com/questions/5533975/netsh-change-adapter-to-dhcp
 	- I had a similar problem with Windows 7. I found that if the link is down on the interface you are trying to modify, you get the message "DHCP is already enabled on this interface." If you plug a cable in (establish a link), the same command works fine.
 */
 
+; ini has a tendency to accumulate blank lines after deleting and inserting ips.
+
 ; Gotta be admin to change adapter settings. Snippet from the docs (in Variables)
+/*
 if not A_IsAdmin
 {
    DllCall("shell32\ShellExecute", uint, 0, str, "RunAs", str, A_AhkPath, str, """" . A_ScriptFullPath . """", str, A_WorkingDir, int, 1)
    ExitApp
 }
+*/
 
 ini_file := A_ScriptDir "\ini.ini"
 
@@ -48,6 +52,19 @@ guiclose:
 guiescape:
 exitapp
 
+enter::
+	guicontrolget, focused, FocusV
+	if (focused == "lb")
+	{
+		bypass := 1
+		gosub, lbselect
+	} 
+	else 
+	{
+		send, {enter}
+	}
+return
+
 ini_get_sections(file) {
 	sections := ""
 	loop, read, % file
@@ -70,29 +87,28 @@ ini_delete_section(ini_file, ini_section) {
 }
 
 lbselect:
-	if (A_GuiEvent != "DoubleClick")
+	if (A_GuiEvent == "DoubleClick" || bypass)
 	{
-		return
+		gui, submit, nohide
+		iniread, type, % ini_file, % lb, type, ip
+		if (type == "cmd")
+		{
+			iniread, cmd, % ini_file, % lb, cmd, % ""
+			stringreplace, cmd, cmd, $interface, % interface, All
+			guicontrol,, command, % cmd
+		}
+		else
+		{
+			iniread, compip, % ini_file, % lb, compip, % ""
+			iniread, gateway, % ini_file, % lb, gateway, % ""
+			iniread, netmask, % ini_file, % lb, netmask, % ""
+			gosub, set_configs
+			guicontrol, focus, compip
+			send, {End}
+		}
+		guicontrol, choose, lb, 0
+		bypass := 0
 	}
-	
-	gui, submit, nohide
-	iniread, type, % ini_file, % lb, type, ip
-	if (type == "cmd")
-	{
-		iniread, cmd, % ini_file, % lb, cmd, % ""
-		stringreplace, cmd, cmd, $interface, % interface, All
-		guicontrol,, command, % cmd
-	}
-	else
-	{
-		iniread, compip, % ini_file, % lb, compip, % ""
-		iniread, gateway, % ini_file, % lb, gateway, % ""
-		iniread, netmask, % ini_file, % lb, netmask, % ""
-		gosub, set_configs
-		guicontrol, focus, compip
-		send, {End}
-	}
-	guicontrol, choose, lb, 0
 return
 
 save:
