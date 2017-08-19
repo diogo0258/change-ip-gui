@@ -12,6 +12,8 @@ if not A_IsAdmin
    ExitApp
 }
 
+ini_file := A_ScriptDir "\ini.ini"
+
 gui, font, s13, courier new
 
 gui, add, text, section, interface
@@ -19,11 +21,7 @@ gui, add, edit, ys w280 vinterface gupdate_command, Ethernet
 gui, add, button, ys w130 gset_ethernet, Ethernet
 gui, add, button, ys w130 gset_wifi, Wi-Fi
 gui, add, text, xm section y+20, presets
-gui, add, button, xm w250 y+20 gupdate_1920, 192.168.0.1
-gui, add, button, xm w250 gupdate_1921, 192.168.1.1
-gui, add, button, xm w250 gupdate_169, 169.254.1.1
-gui, add, button, xm w250 gupdate_ipauto, ip auto, dns auto
-gui, add, button, xm w250 gupdate_gdns, ip auto, dns google
+gui, add, listbox, y+20 w230 R8 glbselect vlb, % ini_get_sections(ini_file)
 
 gui, add, text, ys x+50 section, configs
 gui, add, text, xs y+20 section, computer ip %A_Tab%
@@ -34,6 +32,7 @@ gui, add, text, xs section, gateway %A_Tab%
 gui, add, edit, ys w200 vgateway gupdate_command,
 gui, add, button, xs y+20 section gcompip2gateway, ip -> gateway
 gui, add, button, ys ggateway2compip, gateway -> ip
+gui, add, button, ys gsave, save
 
 gui, add, text, xm section, 
 gui, add, text, xs, command
@@ -49,6 +48,67 @@ guiclose:
 guiescape:
 exitapp
 
+ini_get_sections(file) {
+	sections := ""
+	loop, read, % file
+	{
+		RegexMatch(A_LoopReadLine, "^\[(.*)\]$", match)
+		if (match1) 
+		{
+			sections .= match1 "|"
+		}
+	}
+	
+	return % sections
+}
+
+ini_delete_section(ini_file, ini_section) {
+	fileread, ini_contents, % ini_file
+	ini_contents := regexreplace(ini_contents, "s)\[" . ini_section . "\].*?(?=(\[.+]|$))")
+	filedelete, % ini_file
+	fileappend, % ini_contents, % ini_file
+}
+
+lbselect:
+	if (A_GuiEvent != "DoubleClick")
+	{
+		return
+	}
+	
+	gui, submit, nohide
+	iniread, type, % ini_file, % lb, type, ip
+	if (type == "cmd")
+	{
+		iniread, cmd, % ini_file, % lb, cmd, % ""
+		stringreplace, cmd, cmd, $interface, % interface, All
+		guicontrol,, command, % cmd
+	}
+	else
+	{
+		iniread, compip, % ini_file, % lb, compip, % ""
+		iniread, gateway, % ini_file, % lb, gateway, % ""
+		iniread, netmask, % ini_file, % lb, netmask, % ""
+		gosub, set_configs
+		guicontrol, focus, compip
+		send, {End}
+	}
+	guicontrol, choose, lb, 0
+return
+
+save:
+	gui, submit, nohide
+	inputbox, name, name of entry, name of entry,,,,,,,, % gateway
+	if ErrorLevel
+	{
+		return
+	}
+	iniwrite, % compip, % ini_file, % name, compip
+	iniwrite, % gateway, % ini_file, % name, gateway
+	iniwrite, % netmask, % ini_file, % name, netmask
+	
+	guicontrol,, lb, % name
+return
+
 set_ethernet:
 	guicontrol,, interface, Ethernet
 	gosub, update_command
@@ -57,43 +117,6 @@ return
 set_wifi:
 	guicontrol,, interface, Wi-Fi
 	gosub, update_command
-return
-
-update_1920:
-	compip := "192.168.0.2"
-	netmask := "255.255.255.0"
-	gateway := "192.168.0.1"
-	gosub, set_configs
-	guicontrol, focus, compip
-	send, {End}
-return
-
-update_1921:
-	compip := "192.168.1.2"
-	netmask := "255.255.255.0"
-	gateway := "192.168.1.1"
-	gosub, set_configs
-	guicontrol, focus, compip
-	send, {End}
-return
-
-update_169:
-	compip := "169.254.1.2"
-	netmask := "255.255.255.0"
-	gateway := "169.254.1.1"
-	gosub, set_configs
-	guicontrol, focus, compip
-	send, {End}
-return
-
-update_ipauto:
-	cmd := "netsh interface ip set address """ interface """ dhcp & netsh interface ip set dns """ interface """ dhcp"
-	guicontrol,, command, % cmd
-return
-
-update_gdns:
-	cmd := "netsh interface ip set address """ interface """ dhcp & netsh interface ip set dns name=""" interface """ static 8.8.8.8 & netsh interface ip add dns name=""" interface """ addr=8.8.4.4 index=2"
-	guicontrol,, command, % cmd
 return
 
 compip2gateway:
@@ -130,4 +153,18 @@ return
 run_command:
 	gui, submit, nohide
 	RunWait, %comspec% /c %command%
+return
+
+del::
+	guicontrolget, focused, FocusV
+	if (focused == "lb")
+	{
+		gui, submit, nohide
+		ini_delete_section(ini_file, lb)
+		guicontrol,, lb, % "|" ini_get_sections(ini_file)
+	} 
+	else 
+	{
+		send, {del}
+	}
 return
