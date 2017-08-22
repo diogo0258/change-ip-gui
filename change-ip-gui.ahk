@@ -22,8 +22,6 @@ from http://stackoverflow.com/questions/5533975/netsh-change-adapter-to-dhcp
 */
 
 #NoEnv
-#NoTrayIcon
-; no tray because permanent gui, not a always running script.
 
 ; Gotta be admin to change adapter settings. Snippet from the docs (in Variables)
 ; or shajul's, I don't know anymore: http://www.autohotkey.com/board/topic/46526-run-as-administrator-xpvista7-a-isadmin-params-lib/
@@ -48,7 +46,7 @@ putty := A_ScriptDir "\putty.exe"
 Gui, Add, Text, x12 y9 w120 h20 , Interfaces
 Gui, Add, ListBox, x12 y29 w120 h50 vinterface gupdate_cmd, % get_interfaces_list(interfaces_tmpfile)
 
-Gui, Add, Text, x12 y89 w120 h20 , Configs salvas
+Gui, Add, Text, x12 y89 w120 h20 , Presets
 Gui, Add, ListBox, x12 y109 w120 h130 vpreset gpreset_select Hwndpresets_hwnd, % ini_get_sections(presets_ini_file)
 Gui, Add, Button, x12 y233 w30 h20 gpreset_up, /\
 Gui, Add, Button, x42 y233 w30 h20 gpreset_down, \/
@@ -59,7 +57,7 @@ Gui, Add, CheckBox, x162 y29 w70 h20 vip_ignore gip_toggle, ignore
 Gui, Add, CheckBox, x242 y29 w70 h20 vip_auto gip_toggle, dhcp
 Gui, Add, Text, x162 y59 w80 h20 , gateway
 Gui, Add, Edit, x242 y59 w120 h20 vgateway gupdate_cmd, 192.168.0.1
-Gui, Add, Text, x162 y79 w80 h20 , computador
+Gui, Add, Text, x162 y79 w80 h20 , computer
 Gui, Add, Edit, x242 y79 w120 h20 vcomp_ip gupdate_cmd, 192.168.0.2
 Gui, Add, Text, x162 y99 w80 h20 , netmask
 Gui, Add, Edit, x242 y99 w120 h20 vnetmask gupdate_cmd, 255.255.255.0
@@ -69,9 +67,9 @@ Gui, Add, GroupBox, x152 y139 w260 h100 , DNS
 Gui, Add, CheckBox, x160 y160 w70 h20 vdns_ignore gdns_toggle, ignore
 Gui, Add, CheckBox, x242 y159 w70 h20 checked vdns_auto gdns_toggle, auto
 Gui, Add, Button, x312 y159 w90 h20 gset_google_dns, Google DNS
-Gui, Add, Text, x162 y189 w80 h20 , servidor 1
+Gui, Add, Text, x162 y189 w80 h20 , server 1
 Gui, Add, Edit, x242 y189 w120 h20 vdns_1 gupdate_cmd, 8.8.8.8
-Gui, Add, Text, x162 y209 w80 h20 , servidor 2
+Gui, Add, Text, x162 y209 w80 h20 , server 2
 Gui, Add, Edit, x242 y209 w120 h20 vdns_2 gupdate_cmd, 8.8.4.4
 
 Gui, Add, Text, x12 y279 w120 h20 , Cmd
@@ -80,7 +78,7 @@ Gui, Add, Button, x432 y299 w60 h30 grun_cmd, Run
 
 Gui, Add, Button, x432 y19 w60 h30 gsave, Save
 
-Gui, Add, Text, x432 y69 w120 h20 , Outros
+Gui, Add, Text, x432 y69 w120 h20 , Other
 Gui, Add, Button, x432 y89 w120 h30 gping, ping gateway
 Gui, Add, Button, x432 y129 w120 h30 gbrowse, browse gateway
 Gui, Add, Button, x432 y169 w120 h30 gtelnet, telnet gateway
