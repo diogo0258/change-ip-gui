@@ -9,8 +9,8 @@ TODO:
 - find a better way to make context sensitive hotkeys for when listbox is selected
 	- didn't work: hotkey ifwinactive ahk_id %controlhwnd%
 - ini has a tendency to accumulate blank lines after deleting and inserting ips. Should fix?
-- use more robust ini functions, maybe lib, objects?
-- button to get active adapter confs
+- use more robust ini functions, maybe existing lib, objects?
+- add button to get active adapter confs
 */
 
 /*
@@ -118,66 +118,6 @@ GuiClose:
 GuiEscape:
 ExitApp
 
-
-; ini and helper funcs
-
-ini_get_sections(file) {
-	sections := ""
-	loop, read, % file
-	{
-		RegexMatch(A_LoopReadLine, "^\[(.*)\]$", match)  
-			; couldn't make this work with multiline regex (option "m")
-			; something like "m)^\[[^\]]+\]$"
-			; "m)  ^  \[  [^\]]+  \]  $"
-
-		if (match1) 
-		{
-			sections .= match1 "|"
-		}
-	}
-	
-	return % sections
-}
-
-ini_delete_section(ini_file, ini_section) {
-	fileread, ini_contents, % ini_file
-	ini_contents := regexreplace(ini_contents, "s)\[" . ini_section . "\].*?(?=(\[.+]|$))")
-	filedelete, % ini_file
-	fileappend, % ini_contents, % ini_file
-}
-
-ini_move_section_up(file, section) {
-	fileread, ini_contents, % file
-	
-	stringreplace, ini_contents, ini_contents, % section, PLACEHOLDER
-		; avoid especially dots in regex pattern
-	
-	ini_contents := regexreplace(ini_contents, "(\r?\n)*$", "`r`n")
-		; if moving the last one and there's no newline at the end of file, put one there.
-	
-	ini_contents := regexreplace(ini_contents, "(\[[^\[]+)\[PLACEHOLDER]([^\[]+)", "[PLACEHOLDER]$2$1")  
-
-	stringreplace, ini_contents, ini_contents, PLACEHOLDER, % section
-
-	filedelete, % file
-	fileappend, % ini_contents, % file
-}
-
-ini_move_section_down(file, section) {
-	fileread, ini_contents, % file
-	
-	stringreplace, ini_contents, ini_contents, % section, PLACEHOLDER
-	
-	ini_contents := regexreplace(ini_contents, "(\r?\n)*$", "`r`n")
-		; add last newline, don't know if needed in this case
-		
-	ini_contents := regexreplace(ini_contents, "\[PLACEHOLDER\]([^\[]+)(\[[^\[]+)?", "$2[PLACEHOLDER]$1")
-	
-	stringreplace, ini_contents, ini_contents, PLACEHOLDER, % section
-	
-	filedelete, % file
-	fileappend, % ini_contents, % file	
-}
 
 get_interfaces_list(tmp_file) {
 	filedelete, % tmp_file
@@ -498,47 +438,5 @@ LB_get_count(hwnd) {
 }
 
 
-/*
-  ShellRun by Lexikos
-    requires: AutoHotkey_L
-    license: http://creativecommons.org/publicdomain/zero/1.0/
-
-  Credit for explaining this method goes to BrandonLive:
-  http://brandonlive.com/2008/04/27/getting-the-shell-to-run-an-application-for-you-part-2-how/
- 
-  Shell.ShellExecute(File [, Arguments, Directory, Operation, Show])
-  http://msdn.microsoft.com/en-us/library/windows/desktop/gg537745
-*/
-ShellRun(prms*)
-{
-    shellWindows := ComObjCreate("{9BA05972-F6A8-11CF-A442-00A0C90A8F39}")
-    
-    desktop := shellWindows.Item(ComObj(19, 8)) ; VT_UI4, SCW_DESKTOP                
-   
-    ; Retrieve top-level browser object.
-    if ptlb := ComObjQuery(desktop
-        , "{4C96BE40-915C-11CF-99D3-00AA004AE837}"  ; SID_STopLevelBrowser
-        , "{000214E2-0000-0000-C000-000000000046}") ; IID_IShellBrowser
-    {
-        ; IShellBrowser.QueryActiveShellView -> IShellView
-        if DllCall(NumGet(NumGet(ptlb+0)+15*A_PtrSize), "ptr", ptlb, "ptr*", psv:=0) = 0
-        {
-            ; Define IID_IDispatch.
-            VarSetCapacity(IID_IDispatch, 16)
-            NumPut(0x46000000000000C0, NumPut(0x20400, IID_IDispatch, "int64"), "int64")
-           
-            ; IShellView.GetItemObject -> IDispatch (object which implements IShellFolderViewDual)
-            DllCall(NumGet(NumGet(psv+0)+15*A_PtrSize), "ptr", psv
-                , "uint", 0, "ptr", &IID_IDispatch, "ptr*", pdisp:=0)
-           
-            ; Get Shell object.
-            shell := ComObj(9,pdisp,1).Application
-           
-            ; IShellDispatch2.ShellExecute
-            shell.ShellExecute(prms*)
-           
-            ObjRelease(psv)
-        }
-        ObjRelease(ptlb)
-    }
-}
+#include %a_scriptdir%\ini.ahk
+#include %a_scriptdir%\shellrun.ahk
