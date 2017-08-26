@@ -11,10 +11,12 @@ TODO:
 - ini has a tendency to accumulate blank lines after deleting and inserting ips. Should fix?
 - use more robust ini functions, maybe existing lib, objects?
 - add button to get active adapter confs
+- preset names containing "|" break the listbox
+
 */
 
 /*
-- when interface is disconnected, switching to dhcp can be unsuccessful. 
+- when interface is disconnected, switching to DHCP can be unsuccessful. 
 from http://stackoverflow.com/questions/5533975/netsh-change-adapter-to-dhcp
 	- When I run the script to switch back to dhcp I get the following message
 		"DHCP is already enabled on this interface."
